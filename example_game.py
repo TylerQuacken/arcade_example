@@ -1,4 +1,5 @@
 # Basic arcade shooter
+#
 
 # Imports
 import arcade
@@ -10,6 +11,27 @@ SCREEN_HEIGHT = 600
 SCREEN_TITLE = "Arcade Space Shooter"
 SCALING = 1.0
 
+# Classes
+
+
+class FlyingSprite(arcade.Sprite):
+    """Base class for all flying sprites
+    Flying sprites include enemies and clouds
+    """
+
+    def update(self):
+        """Update the position of the sprite
+        When it moves off screen to the left, remove it
+        """
+
+        # Move the sprite
+        super().update()
+
+        # Remove us if we're off screen
+        if self.right < 0:
+            self.remove_from_sprite_lists()
+
+
 class SpaceShooter(arcade.Window):
     """Space Shooter side scroller game
     Player starts on the left, enemies appear on the right
@@ -18,43 +40,41 @@ class SpaceShooter(arcade.Window):
     Collisions end the game
     """
 
-    def __init__(self, width, height, title):
-        """Initialize the game
-        """
+    def __init__(self, width: int, height: int, title: str):
+        """Initialize the game"""
         super().__init__(width, height, title)
 
-        # Set up the empty sprite lists
+        # Setup the empty sprite lists
         self.enemies_list = arcade.SpriteList()
         self.clouds_list = arcade.SpriteList()
         self.all_sprites = arcade.SpriteList()
 
     def setup(self):
-        """Get the game ready to play
-        """
+        """Get the game ready to play"""
 
         # Set the background color
         arcade.set_background_color(arcade.color.SKY_BLUE)
 
-        # Set up the player
-        self.player = arcade.Sprite("images/duck.png", SCALING)
+        # Setup the player
+        self.player = arcade.Sprite("images/jet.png", SCALING)
         self.player.center_y = self.height / 2
         self.player.left = 10
         self.all_sprites.append(self.player)
 
-        # Spawn a new enemy every 0.25 seconds
-        arcade.schedule(self.add_enemy, 0.25)
+        # Spawn a new enemy every second
+        arcade.schedule(self.add_enemy, 1.0)
 
-        # Spawn a new cloud every second
-        arcade.schedule(self.add_cloud, 1.0)
+        # Spawn a new cloud every 3 seconds
+        arcade.schedule(self.add_cloud, 3.0)
 
-        # Load your background music
+        # Load our background music
         # Sound source: http://ccmixter.org/files/Apoxode/59262
         # License: https://creativecommons.org/licenses/by/3.0/
         self.background_music = arcade.load_sound(
             "sounds/Apoxode_-_Electric_1.wav"
         )
 
-        # Load your sounds
+        # Load our other sounds
         # Sound sources: Jon Fincher
         self.collision_sound = arcade.load_sound("sounds/Collision.wav")
         self.move_up_sound = arcade.load_sound("sounds/Rising_putter.wav")
@@ -66,6 +86,7 @@ class SpaceShooter(arcade.Window):
         # Unpause everything and reset the collision timer
         self.paused = False
         self.collided = False
+        self.collision_timer = 0.0
 
     def add_enemy(self, delta_time: float):
         """Adds a new enemy to the screen
@@ -75,7 +96,7 @@ class SpaceShooter(arcade.Window):
         """
 
         # First, create the new enemy sprite
-        enemy = FlyingSprite("images/enemy.png", SCALING)
+        enemy = FlyingSprite("images/missile.png", SCALING)
 
         # Set its position to a random height and off screen right
         enemy.left = random.randint(self.width, self.width + 10)
@@ -94,7 +115,6 @@ class SpaceShooter(arcade.Window):
         Arguments:
             delta_time {float} -- How much time has passed since the last call
         """
-
         # First, create the new cloud sprite
         cloud = FlyingSprite("images/cloud.png", SCALING)
 
@@ -109,10 +129,10 @@ class SpaceShooter(arcade.Window):
         self.clouds_list.append(cloud)
         self.all_sprites.append(cloud)
 
-    def on_key_press(self, symbol, modifiers):
+    def on_key_press(self, symbol: int, modifiers: int):
         """Handle user keyboard input
         Q: Quit the game
-        P: Pause/Unpause the game
+        P: Pause the game
         I/J/K/L: Move Up, Left, Down, Right
         Arrows: Move Up, Left, Down, Right
 
@@ -163,23 +183,35 @@ class SpaceShooter(arcade.Window):
             or symbol == arcade.key.RIGHT
         ):
             self.player.change_x = 0
-    
+
     def on_update(self, delta_time: float):
         """Update the positions and statuses of all game objects
-        If paused, do nothing
+        If we're paused, do nothing
+        Once everything has moved, check for collisions between
+        the player and the list of enemies
 
         Arguments:
             delta_time {float} -- Time since the last update
         """
 
-        # If paused, don't update anything
+        # Did we collide with something earlier? If so, update our timer
+        if self.collided:
+            self.collision_timer += delta_time
+            # If we've paused for two seconds, we can quit
+            if self.collision_timer > 2.0:
+                arcade.close_window()
+            # Stop updating things as well
+            return
+
+        # If we're paused, don't update anything
         if self.paused:
             return
 
-        # Did you hit anything? If so, end the game
-        if len(self.player.collides_with_list(self.enemies_list)) > 0:
+        # Did we hit anything? If so, end the game
+        if self.player.collides_with_list(self.enemies_list):
+            self.collided = True
+            self.collision_timer = 0.0
             arcade.play_sound(self.collision_sound)
-            arcade.close_window()
 
         # Update everything
         for sprite in self.all_sprites:
@@ -189,6 +221,7 @@ class SpaceShooter(arcade.Window):
             sprite.center_y = int(
                 sprite.center_y + sprite.change_y * delta_time
             )
+        # self.all_sprites.update()
 
         # Keep the player on screen
         if self.player.top > self.height:
@@ -207,26 +240,7 @@ class SpaceShooter(arcade.Window):
         self.all_sprites.draw()
 
 
-class FlyingSprite(arcade.Sprite):
-    """Base class for all flying sprites
-    Flying sprites include enemies and clouds
-    """
-
-    def update(self):
-        """Update the position of the sprite
-        When it moves off screen to the left, remove it
-        """
-
-        # Move the sprite
-        super().update()
-
-        # Remove if off the screen
-        if self.right < 0:
-            self.remove_from_sprite_lists()
-
-
-
-if __name__=='__main__':
+if __name__ == "__main__":
     # Create a new Space Shooter window
     space_game = SpaceShooter(
         int(SCREEN_WIDTH * SCALING), int(SCREEN_HEIGHT * SCALING), SCREEN_TITLE
