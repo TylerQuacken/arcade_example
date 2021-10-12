@@ -6,6 +6,7 @@ import math
 import time
 import os
 import arcade
+# from IPython import embed
 
 # Constants
 SCREEN_WIDTH = 800
@@ -13,8 +14,10 @@ SCREEN_HEIGHT = 600
 SCREEN_TITLE = "Arcade Space Shooter"
 SCALING = 1.0
 PL_E_SCALING = 1.0
+FULLSCREEN = False
 
 PLAYER_DIRECTORY = "images/jet_anim/"
+MISSILE_DIRECTORY = "images/missile_anim/"
 
 class SpaceShooter(arcade.Window):
     """Space Shooter side scroller game
@@ -27,7 +30,7 @@ class SpaceShooter(arcade.Window):
     def __init__(self, width, height, title):
         """Initialize the game
         """
-        super().__init__(width, height, title)
+        super().__init__(width, height, title, fullscreen=FULLSCREEN)
 
         # Set up the empty sprite lists
         self.enemies_list = arcade.SpriteList()
@@ -35,6 +38,7 @@ class SpaceShooter(arcade.Window):
         self.all_sprites = arcade.SpriteList()
         self.player = None
         self.background_music = None
+        self.score = 0
 
     def setup(self):
         """Get the game ready to play
@@ -45,14 +49,14 @@ class SpaceShooter(arcade.Window):
 
         # Set up the player
         # self.player = arcade.Sprite("images/plane.png", PL_E_SCALING)
-        player_path = os.path.join(PLAYER_DIRECTORY, "Plane_0.png")
-        self.player = Player(player_path, PL_E_SCALING)
+        player_img = os.path.join(PLAYER_DIRECTORY, "Plane_0.png")
+        self.player = AnimatedSprite(player_img, PLAYER_DIRECTORY, PL_E_SCALING)
         self.player.center_y = self.height / 2
         self.player.left = 10
         self.all_sprites.append(self.player)
 
         # Spawn a new enemy every 0.25 seconds
-        arcade.schedule(self.add_enemy, 0.25)
+        arcade.schedule(self.add_enemy, 0.1)
 
         # Spawn a new cloud every second
         arcade.schedule(self.add_cloud, 4.0)
@@ -78,6 +82,10 @@ class SpaceShooter(arcade.Window):
         self.collided = False
         self.collision_time = 0.0
         self.collision_length = 1.0
+        self.score = 0
+
+        for i in range(5):
+            self.add_cloud(0.0, on_screen=True)
 
     def add_enemy(self, delta_time: float):
         """Adds a new enemy to the screen
@@ -90,26 +98,26 @@ class SpaceShooter(arcade.Window):
             return
 
         # First, create the new enemy sprite
-        enemy = FlyingSprite("images/Missile2.png", PL_E_SCALING)
+        enemy_img = os.path.join(MISSILE_DIRECTORY, "Missile_0.png")
+        enemy = AnimatedSprite(enemy_img, MISSILE_DIRECTORY, PL_E_SCALING)
 
         # Set its position to a random height and off screen right
         enemy.left = random.randint(self.width, self.width + 10)
         enemy.top = random.randint(10, self.height - 10)
 
         # Set its speed to a random speed heading left
-        enemy.velocity = (random.randint(-400, -100), 0)
+        enemy.velocity = (random.randint(-600, -100), 0)
 
         # Add it to the enemies list
         self.enemies_list.append(enemy)
         self.all_sprites.append(enemy)
 
-    def add_cloud(self, delta_time: float):
+    def add_cloud(self, delta_time: float, on_screen=False):
         """Adds a new cloud to the screen
 
         Arguments:
             delta_time {float} -- How much time has passed since the last call
         """
-
         if self.paused:
             return
 
@@ -117,7 +125,10 @@ class SpaceShooter(arcade.Window):
         cloud = FlyingSprite("images/cloud.png", SCALING)
 
         # Set its position to a random height and off screen right
-        cloud.left = random.randint(self.width, self.width + 10)
+        if on_screen is True:
+            cloud.left = random.randint(0, SCREEN_WIDTH)
+        else:
+            cloud.left = random.randint(self.width, self.width + 10)
         cloud.top = random.randint(10, self.height - 10)
 
         # Set its speed to a random speed heading left
@@ -181,7 +192,7 @@ class SpaceShooter(arcade.Window):
             or symbol == arcade.key.RIGHT
         ):
             self.player.change_x = 0
-    
+
     def on_update(self, delta_time: float):
         """Update the positions and statuses of all game objects
         If paused, do nothing
@@ -205,13 +216,14 @@ class SpaceShooter(arcade.Window):
             for sprite in self.all_sprites:
                 sprite.center_x = sprite.center_x + sprite.change_x * delta_time
                 sprite.center_y = sprite.center_y + sprite.change_y * delta_time
+            self.score += 1
         else:
             if time.time() - self.collision_time > self.collision_length:
                 arcade.close_window()
 
         self.player.update_animation(delta_time)
-
-
+        for enemy in self.enemies_list:
+            enemy.update_animation(delta_time)
 
         # Keep the player on screen
         if self.player.top > self.height:
@@ -232,6 +244,30 @@ class SpaceShooter(arcade.Window):
         self.enemies_list.draw()
         self.player.draw()
 
+        # for enemy in self.enemies_list:
+        #     enemy.draw_hit_box()
+        # self.player.draw_hit_box()
+
+        # Draw the score in the lower left
+        score_text = f"Score: {self.score}"
+
+        # First a black background for a shadow effect
+        arcade.draw_text(
+            score_text,
+            start_x=10,
+            start_y=10,
+            color=arcade.csscolor.BLACK,
+            font_size=40,
+        )
+        # Now in white slightly shifted
+        arcade.draw_text(
+            score_text,
+            start_x=15,
+            start_y=15,
+            color=arcade.csscolor.WHITE,
+            font_size=40,
+        )
+
 
 def load_anim_frames(directory):
     frames = []
@@ -239,7 +275,6 @@ def load_anim_frames(directory):
         if filename.endswith(".png"):
             path = os.path.join(directory, filename)
             frames.append(arcade.load_texture(path))
-    
     return frames
 
 class FlyingSprite(arcade.Sprite):
@@ -255,22 +290,22 @@ class FlyingSprite(arcade.Sprite):
         # Move the sprite
         super().update()
 
-
         # Remove if off the screen
         if self.right < 0:
             self.remove_from_sprite_lists()
 
-class Player(arcade.Sprite):
+
+class AnimatedSprite(FlyingSprite):
     """Class for the character and animations"""
 
-    def __init__(self, init_frame, scale):
-        super().__init__(init_frame, scale)
+    def __init__(self, init_frame, sprite_directory, scale):
+        super().__init__(init_frame, scale, hit_box_algorithm="Detailed")
         
-        self.idle_textures = load_anim_frames(PLAYER_DIRECTORY)
+        self.idle_textures = load_anim_frames(sprite_directory)
         self.frame_num = 0
         self.num_frames = len(self.idle_textures) - 1
         self.timer = 0
-        self.change_per = 0.05
+        self.change_per = 0.03
         self.texture = self.idle_textures[self.frame_num]
 
     def update_animation(self, delta_time: float = 1 / 60):
@@ -283,9 +318,6 @@ class Player(arcade.Sprite):
             self.timer = 0
             if self.frame_num > self.num_frames:
                 self.frame_num = 0
-
-
-
 
 
 
