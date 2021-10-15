@@ -18,6 +18,7 @@ FULLSCREEN = False
 
 PLAYER_DIRECTORY = "images/jet_anim/"
 MISSILE_DIRECTORY = "images/missile_anim/"
+EXPLOSION_DIRECTORY = "images/explosion_anim/"
 
 class SpaceShooter(arcade.Window):
     """Space Shooter side scroller game
@@ -35,10 +36,16 @@ class SpaceShooter(arcade.Window):
         # Set up the empty sprite lists
         self.enemies_list = arcade.SpriteList()
         self.clouds_list = arcade.SpriteList()
+        self.explosions_list = arcade.SpriteList()
         self.all_sprites = arcade.SpriteList()
         self.player = None
         self.background_music = None
         self.score = 0
+        self.paused = False
+        self.collided = False
+        self.collision_time = 0.0
+        self.collision_length = 1.0
+        self.explosion_textures = []
 
     def setup(self):
         """Get the game ready to play
@@ -56,10 +63,14 @@ class SpaceShooter(arcade.Window):
         self.all_sprites.append(self.player)
 
         # Spawn a new enemy every 0.25 seconds
-        arcade.schedule(self.add_enemy, 0.1)
+        arcade.schedule(self.add_enemy, 0.2)
 
         # Spawn a new cloud every second
         arcade.schedule(self.add_cloud, 4.0)
+
+        self.explosion_textures = load_anim_frames(EXPLOSION_DIRECTORY)
+        self.explosion_img = os.path.join(EXPLOSION_DIRECTORY, "sprite_0.png")
+        self.enemy_img = os.path.join(MISSILE_DIRECTORY, "Missile_0.png")
 
         # Load your background music
         # Sound source: http://ccmixter.org/files/Apoxode/59262
@@ -98,8 +109,7 @@ class SpaceShooter(arcade.Window):
             return
 
         # First, create the new enemy sprite
-        enemy_img = os.path.join(MISSILE_DIRECTORY, "Missile_0.png")
-        enemy = AnimatedSprite(enemy_img, MISSILE_DIRECTORY, PL_E_SCALING)
+        enemy = AnimatedSprite(self.enemy_img, MISSILE_DIRECTORY, PL_E_SCALING)
 
         # Set its position to a random height and off screen right
         enemy.left = random.randint(self.width, self.width + 10)
@@ -137,6 +147,8 @@ class SpaceShooter(arcade.Window):
         # Add it to the enemies list
         self.clouds_list.append(cloud)
         self.all_sprites.append(cloud)
+
+        print(cloud.change_x)
 
     def on_key_press(self, symbol, modifiers):
         """Handle user keyboard input
@@ -203,27 +215,43 @@ class SpaceShooter(arcade.Window):
 
         # If paused, don't update anything
         if self.paused:
-            return
+            embed()
+            self.paused = False
 
         # Did you hit anything? If so, end the game
-        if len(self.player.collides_with_list(self.enemies_list)) > 0 and self.collided is False:
+        collisions = self.player.collides_with_list(self.enemies_list)
+        if len(collisions) > 0:
             arcade.play_sound(self.collision_sound)
             self.collided = True
             self.collision_time = time.time()
 
-        if not self.collided:
-            # Update everything
-            for sprite in self.all_sprites:
-                sprite.center_x = sprite.center_x + sprite.change_x * delta_time
-                sprite.center_y = sprite.center_y + sprite.change_y * delta_time
-            self.score += 1
-        else:
-            if time.time() - self.collision_time > self.collision_length:
-                arcade.close_window()
+            # Save off missile and plane location
+            # remove missile and plane from lists
+            explosion = Explosion(self.explosion_img, self.explosion_textures)
 
-        self.player.update_animation(delta_time)
-        for enemy in self.enemies_list:
-            enemy.update_animation(delta_time)
+            # Move it to the location of the coin
+            explosion.center_x = collisions[0].center_x
+            explosion.center_y = collisions[0].center_y
+            explosion.change_x = collisions[0].change_x
+
+            # Call update() because it sets which image we start on
+            # explosion.update()
+
+            # Add to a list of sprites that are explosions
+            self.explosions_list.append(explosion)
+            self.all_sprites.append(explosion)
+            collisions[0].remove_from_sprite_lists()
+        
+        self.score += 1
+
+        if self.collided:
+            if time.time() - self.collision_time > self.collision_length:
+                pass
+                # arcade.close_window()
+        
+        self.player.update(delta_time)
+        self.enemies_list.update()
+        self.explosions_list.update()
 
         # Keep the player on screen
         if self.player.top > self.height:
@@ -243,6 +271,7 @@ class SpaceShooter(arcade.Window):
         self.clouds_list.draw()
         self.enemies_list.draw()
         self.player.draw()
+        self.explosions_list.draw()
 
         # for enemy in self.enemies_list:
         #     enemy.draw_hit_box()
@@ -282,13 +311,14 @@ class FlyingSprite(arcade.Sprite):
     Flying sprites include enemies and clouds
     """
 
-    def update(self):
+    def update(self, delta_time: float = 1/60):
         """Update the position of the sprite
         When it moves off screen to the left, remove it
         """
 
         # Move the sprite
-        super().update()
+        self.center_x = self.center_x + self.change_x * delta_time
+        self.center_y = self.center_y + self.change_y * delta_time
 
         # Remove if off the screen
         if self.right < 0:
@@ -298,7 +328,7 @@ class FlyingSprite(arcade.Sprite):
 class AnimatedSprite(FlyingSprite):
     """Class for the character and animations"""
 
-    def __init__(self, init_frame, sprite_directory, scale):
+    def __init__(self, init_frame, sprite_directory, scale=1.0):
         super().__init__(init_frame, scale, hit_box_algorithm="Detailed")
         
         self.idle_textures = load_anim_frames(sprite_directory)
@@ -308,7 +338,8 @@ class AnimatedSprite(FlyingSprite):
         self.change_per = 0.03
         self.texture = self.idle_textures[self.frame_num]
 
-    def update_animation(self, delta_time: float = 1 / 60):
+    def update(self, delta_time: float = 1 / 60):
+        super().update(delta_time)
 
         self.texture = self.idle_textures[self.frame_num]
 
@@ -318,6 +349,31 @@ class AnimatedSprite(FlyingSprite):
             self.timer = 0
             if self.frame_num > self.num_frames:
                 self.frame_num = 0
+
+class Explosion(arcade.Sprite):
+    """Generates an explosion animation"""
+    def __init__(self, init_frame, texture_list, scale=1.0):
+        super().__init__(init_frame, scale)
+        self.texture_list = texture_list
+        self.frame_num = 0
+        self.num_frames = len(self.texture_list) - 1
+        self.timer = 0
+        self.texture = self.texture_list[self.frame_num]
+        self.change_per = 0.02
+
+    def update(self, delta_time: float = 1 / 60):
+        # Move the sprite
+        self.center_x = self.center_x + self.change_x * delta_time
+        self.center_y = self.center_y + self.change_y * delta_time
+        
+        self.texture = self.texture_list[self.frame_num]
+
+        self.timer += delta_time
+        if self.timer > self.change_per:
+            self.frame_num += 1
+            self.timer = 0
+            if self.frame_num > self.num_frames:
+                self.remove_from_sprite_lists()
 
 
 
