@@ -148,8 +148,6 @@ class SpaceShooter(arcade.Window):
         self.clouds_list.append(cloud)
         self.all_sprites.append(cloud)
 
-        print(cloud.change_x)
-
     def on_key_press(self, symbol, modifiers):
         """Handle user keyboard input
         Q: Quit the game
@@ -215,7 +213,6 @@ class SpaceShooter(arcade.Window):
 
         # If paused, don't update anything
         if self.paused:
-            embed()
             self.paused = False
 
         # Did you hit anything? If so, end the game
@@ -252,6 +249,7 @@ class SpaceShooter(arcade.Window):
         self.player.update(delta_time)
         self.enemies_list.update()
         self.explosions_list.update()
+        self.clouds_list.update()
 
         # Keep the player on screen
         if self.player.top > self.height:
