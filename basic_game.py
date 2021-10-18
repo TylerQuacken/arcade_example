@@ -289,8 +289,8 @@ class SpaceShooter(arcade.Window):
         # Now in white slightly shifted
         arcade.draw_text(
             score_text,
-            start_x=15,
-            start_y=15,
+            start_x=12,
+            start_y=12,
             color=arcade.csscolor.WHITE,
             font_size=40,
         )
