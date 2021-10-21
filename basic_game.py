@@ -266,10 +266,10 @@ class SpaceShooter(arcade.Window):
 
         arcade.start_render()
         # self.all_sprites.draw()
-        self.clouds_list.draw()
-        self.enemies_list.draw()
-        self.player.draw()
-        self.explosions_list.draw()
+        self.clouds_list.draw(pixelated=True)
+        self.enemies_list.draw(pixelated=True)
+        self.player.draw(pixelated=True)
+        self.explosions_list.draw(pixelated=True)
 
         # for enemy in self.enemies_list:
         #     enemy.draw_hit_box()
@@ -357,7 +357,7 @@ class Explosion(arcade.Sprite):
         self.num_frames = len(self.texture_list) - 1
         self.timer = 0
         self.texture = self.texture_list[self.frame_num]
-        self.change_per = 0.02
+        self.change_per = 0.05
 
     def update(self, delta_time: float = 1 / 60):
         # Move the sprite
@@ -376,6 +376,9 @@ class Explosion(arcade.Sprite):
 
 
 if __name__=='__main__':
+    import os
+    # if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    #     os.chdir(sys._MEIPASS)
     # Create a new Space Shooter window
     space_game = SpaceShooter(
         int(SCREEN_WIDTH * SCALING), int(SCREEN_HEIGHT * SCALING), SCREEN_TITLE
