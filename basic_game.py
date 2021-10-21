@@ -6,6 +6,7 @@ import math
 import time
 import os
 import arcade
+from copy import deepcopy
 # from IPython import embed
 
 # Constants
@@ -15,6 +16,11 @@ SCREEN_TITLE = "Arcade Space Shooter"
 SCALING = 1.0
 PL_E_SCALING = 1.0
 FULLSCREEN = False
+
+HEALTHBAR_X = 600
+HEALTHBAR_Y = 20
+HEALTHBAR_WIDTH = 100
+HEALTHBAR_HEIGHT = 20
 
 PLAYER_DIRECTORY = "images/jet_anim/"
 MISSILE_DIRECTORY = "images/missile_anim/"
@@ -42,7 +48,7 @@ class SpaceShooter(arcade.Window):
         self.background_music = None
         self.score = 0
         self.paused = False
-        self.collided = False
+        self.destroyed = False
         self.collision_time = 0.0
         self.collision_length = 1.0
         self.explosion_textures = []
@@ -71,6 +77,7 @@ class SpaceShooter(arcade.Window):
         self.explosion_textures = load_anim_frames(EXPLOSION_DIRECTORY)
         self.explosion_img = os.path.join(EXPLOSION_DIRECTORY, "sprite_0.png")
         self.enemy_img = os.path.join(MISSILE_DIRECTORY, "Missile_0.png")
+        self.enemy = AnimatedSprite(self.enemy_img, MISSILE_DIRECTORY, PL_E_SCALING)
 
         # Load your background music
         # Sound source: http://ccmixter.org/files/Apoxode/59262
@@ -90,10 +97,12 @@ class SpaceShooter(arcade.Window):
 
         # Unpause everything and reset the collision timer
         self.paused = False
-        self.collided = False
+        self.destroyed = False
         self.collision_time = 0.0
         self.collision_length = 1.0
         self.score = 0
+        self.max_health = 100
+        self.health = 100
 
         for i in range(5):
             self.add_cloud(0.0, on_screen=True)
@@ -109,7 +118,7 @@ class SpaceShooter(arcade.Window):
             return
 
         # First, create the new enemy sprite
-        enemy = AnimatedSprite(self.enemy_img, MISSILE_DIRECTORY, PL_E_SCALING)
+        enemy = deepcopy(self.enemy)
 
         # Set its position to a random height and off screen right
         enemy.left = random.randint(self.width, self.width + 10)
@@ -219,7 +228,7 @@ class SpaceShooter(arcade.Window):
         collisions = self.player.collides_with_list(self.enemies_list)
         if len(collisions) > 0:
             arcade.play_sound(self.collision_sound)
-            self.collided = True
+            self.health -= collisions[0].damage
             self.collision_time = time.time()
 
             # Save off missile and plane location
@@ -238,13 +247,12 @@ class SpaceShooter(arcade.Window):
             self.explosions_list.append(explosion)
             self.all_sprites.append(explosion)
             collisions[0].remove_from_sprite_lists()
-        
-        self.score += 1
 
-        if self.collided:
+        if self.health <= 0:
             if time.time() - self.collision_time > self.collision_length:
-                pass
-                # arcade.close_window()
+                arcade.close_window()
+        else:
+            self.score += 1
         
         self.player.update(delta_time)
         self.enemies_list.update()
@@ -295,6 +303,23 @@ class SpaceShooter(arcade.Window):
             font_size=40,
         )
 
+        # Draw the 'unhealthy' background
+        if self.health < self.max_health:
+            arcade.draw_rectangle_filled(center_x=HEALTHBAR_X,
+                                         center_y=HEALTHBAR_Y,
+                                         width=HEALTHBAR_WIDTH,
+                                         height=HEALTHBAR_HEIGHT,
+                                         color=arcade.color.RED)
+
+        # Calculate width based on health
+        health_width = HEALTHBAR_WIDTH * (self.health / self.max_health)
+
+        arcade.draw_rectangle_filled(center_x=HEALTHBAR_X - 0.5 * (HEALTHBAR_WIDTH - health_width),
+                                     center_y=HEALTHBAR_Y,
+                                     width=health_width,
+                                     height=HEALTHBAR_HEIGHT,
+                                     color=arcade.color.GREEN)
+
 
 def load_anim_frames(directory):
     frames = []
@@ -335,6 +360,7 @@ class AnimatedSprite(FlyingSprite):
         self.timer = 0
         self.change_per = 0.03
         self.texture = self.idle_textures[self.frame_num]
+        self.damage = 20
 
     def update(self, delta_time: float = 1 / 60):
         super().update(delta_time)
